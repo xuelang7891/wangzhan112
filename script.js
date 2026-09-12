@@ -16,11 +16,12 @@ const CONFIG = {
   ownerAccounts: ['3902041497@qq.com'],
   /* 站长邮箱 */
   ownerEmail: '3902041497@qq.com',
-  /* 邮箱验证码服务地址（Cloudflare Worker，见 worker/worker.js）。
+  /* 邮箱验证码服务地址（Cloudflare Pages Function，见 functions/api/code/）。
      留空 = 演示模式（验证码直接显示在页面上，不真实发邮件）；
-     填上 Worker 地址（如 https://email-code.xxxx.workers.dev）后 =
-     验证码真实发送到邮箱，并在服务端校验。 */
-  emailWorkerUrl: 'https://email-code.3902041497.workers.dev'
+     填上地址后 = 验证码真实发送到邮箱，并在服务端校验。
+     注意：不要用 *.workers.dev 地址（国内网络无法访问），
+     要用网站自己的域名（pages.dev 或自定义域名）。 */
+  emailWorkerUrl: 'https://wangzhan112.pages.dev/api/code'
 };
 
 /* 预置站长账号：密码以「盐 + SHA-256（FNV-1a 兜底）」哈希保存，不存明文。
