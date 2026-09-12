@@ -74,3 +74,5 @@ const CONFIG = {
 ## License
 
 MIT
+
+> **更新记录**：2026-09-12 接入邮箱验证码（Pages Function + QQ 邮箱 SMTP），修复 workers.dev 国内无法访问的问题。
