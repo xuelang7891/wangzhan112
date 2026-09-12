@@ -15,13 +15,7 @@ const CONFIG = {
      由下方 DEFAULT_OWNER_ACCOUNT 在首次加载时自动写入，无需注册。 */
   ownerAccounts: ['3902041497@qq.com'],
   /* 站长邮箱 */
-  ownerEmail: '3902041497@qq.com',
-  /* 邮箱验证码服务地址（Cloudflare Pages Function，见 functions/api/code/）。
-     留空 = 演示模式（验证码直接显示在页面上，不真实发邮件）；
-     填上地址后 = 验证码真实发送到邮箱，并在服务端校验。
-     注意：不要用 *.workers.dev 地址（国内网络无法访问），
-     要用网站自己的域名（pages.dev 或自定义域名）。 */
-  emailWorkerUrl: 'https://wangzhan112.pages.dev/api/code'
+  ownerEmail: '3902041497@qq.com'
 };
 
 /* 预置站长账号：密码以「盐 + SHA-256（FNV-1a 兜底）」哈希保存，不存明文。
@@ -373,10 +367,7 @@ function cacheDom() {
   dom.registerForm = document.getElementById('registerForm');
   dom.regName = document.getElementById('regName');
   dom.regAccount = document.getElementById('regAccount');
-  dom.regCode = document.getElementById('regCode');
   dom.regPassword = document.getElementById('regPassword');
-  dom.sendCodeBtn = document.getElementById('sendCodeBtn');
-  dom.codeNotice = document.getElementById('codeNotice');
 
   dom.tabLogin = document.getElementById('tabLogin');
   dom.tabRegister = document.getElementById('tabRegister');
@@ -731,13 +722,11 @@ function bindEvents() {
     submitLogin();
   });
 
-  /* --- 注册：名字 + 邮箱/手机号 + 验证码 + 密码 --- */
+  /* --- 注册：名字 + 邮箱 + 密码 --- */
   dom.registerForm.addEventListener('submit', function (e) {
     e.preventDefault();
     submitRegister();
   });
-
-  dom.sendCodeBtn.addEventListener('click', handleSendCode);
 
   /* --- 登录 / 注册 Tab 切换 --- */
   dom.tabLogin.addEventListener('click', function () {
@@ -817,12 +806,8 @@ function highlightNav() {
 }
 
 /* =========================================================
-   7.5 登录 / 注册（验证码）
+   7.5 登录 / 注册
    ========================================================= */
-let pendingCode = null; /* { code, account, expiresAt } */
-let sendCooldown = 0;
-let sendTimer = null;
-
 function switchLoginTab(tab) {
   const isLogin = tab === 'login';
   dom.loginForm.hidden = !isLogin;
@@ -833,9 +818,6 @@ function switchLoginTab(tab) {
   dom.tabRegister.classList.toggle('active', !isLogin);
   dom.tabLogin.setAttribute('aria-selected', String(isLogin));
   dom.tabRegister.setAttribute('aria-selected', String(!isLogin));
-  /* 切换 Tab 时作废验证码并清空密码残留 */
-  pendingCode = null;
-  dom.codeNotice.hidden = true;
   if (isLogin) {
     dom.regPassword.value = '';
   } else {
@@ -853,113 +835,10 @@ function openLoginModal(tab) {
   }, 50);
 }
 
-function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function updateSendBtn() {
-  if (sendCooldown > 0) {
-    dom.sendCodeBtn.disabled = true;
-    dom.sendCodeBtn.textContent = '重新发送(' + sendCooldown + 's)';
-  } else {
-    dom.sendCodeBtn.disabled = false;
-    dom.sendCodeBtn.textContent = '发送验证码';
-  }
-}
-
-function startSendCountdown() {
-  sendCooldown = 60;
-  updateSendBtn();
-  clearInterval(sendTimer);
-  sendTimer = setInterval(function () {
-    sendCooldown -= 1;
-    updateSendBtn();
-    if (sendCooldown <= 0) clearInterval(sendTimer);
-  }, 1000);
-}
-
-/* 发送验证码。
-   已配置 CONFIG.emailWorkerUrl 时：调用 Cloudflare Worker 真实发送邮件，
-   验证码由服务端生成并校验（前端拿不到，更安全）。
-   未配置时：演示模式，验证码直接显示在页面下方。 */
-function handleSendCode() {
-  const check = validateAccount(dom.regAccount.value);
-  if (!check.ok) {
-    showToast(check.msg);
-    return;
-  }
-  if (findAccount(check.account)) {
-    showToast('该账号已注册，请直接登录');
-    return;
-  }
-  if (CONFIG.emailWorkerUrl) {
-    sendCodeViaWorker(check.account);
-  } else {
-    demoSendCode(check.account);
-  }
-}
-
-function demoSendCode(account) {
-  const code = generateCode();
-  pendingCode = {
-    code: code,
-    account: account,
-    server: false,
-    expiresAt: Date.now() + 5 * 60 * 1000
-  };
-  dom.codeNotice.hidden = false;
-  dom.codeNotice.textContent =
-    '验证码已发送（演示环境，未真实发送邮件）：' +
-    code +
-    '，5 分钟内有效';
-  showToast('验证码已发送');
-  startSendCountdown();
-}
-
-function sendCodeViaWorker(account) {
-  dom.sendCodeBtn.disabled = true;
-  dom.sendCodeBtn.textContent = '发送中…';
-  fetch(CONFIG.emailWorkerUrl + '/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: account })
-  })
-    .then(function (r) {
-      return r
-        .json()
-        .catch(function () {
-          return { ok: false, msg: '服务响应异常' };
-        });
-    })
-    .then(function (res) {
-      if (res && res.ok) {
-        pendingCode = {
-          code: null,
-          account: account,
-          server: true,
-          expiresAt: Date.now() + 5 * 60 * 1000
-        };
-        dom.codeNotice.hidden = false;
-        dom.codeNotice.textContent =
-          '验证码已发送到 ' + account + '，请查收邮件（5 分钟内有效）';
-        showToast('验证码已发送');
-        startSendCountdown();
-      } else {
-        showToast((res && res.msg) || '发送失败，请稍后重试');
-        updateSendBtn();
-      }
-    })
-    .catch(function () {
-      showToast('网络错误，发送失败');
-      updateSendBtn();
-    });
-}
-
 function submitRegister() {
   const name = dom.regName.value.trim();
   const account = dom.regAccount.value.trim();
   const password = dom.regPassword.value;
-  const code = dom.regCode.value.trim();
 
   if (!name) {
     showToast('请填写名字');
@@ -974,61 +853,11 @@ function submitRegister() {
     showToast('密码至少 6 位');
     return;
   }
-  if (!pendingCode) {
-    showToast('请先获取验证码');
-    return;
-  }
-  if (pendingCode.account !== accCheck.account) {
-    showToast('账号已变更，请重新获取验证码');
-    return;
-  }
-  if (Date.now() > pendingCode.expiresAt) {
-    pendingCode = null;
-    dom.codeNotice.hidden = true;
-    showToast('验证码已过期，请重新获取');
-    return;
-  }
   if (findAccount(accCheck.account)) {
     showToast('该账号已注册，请直接登录');
     return;
   }
-
-  /* 真实邮件模式：验证码在服务端校验 */
-  if (pendingCode.server) {
-    verifyCodeViaWorker(accCheck.account, code, function (res) {
-      if (!(res && res.ok)) {
-        showToast((res && res.msg) || '验证码不正确');
-        return;
-      }
-      finishRegister(name, accCheck.account, password);
-    });
-    return;
-  }
-
-  if (code !== pendingCode.code) {
-    showToast('验证码不正确');
-    return;
-  }
   finishRegister(name, accCheck.account, password);
-}
-
-function verifyCodeViaWorker(account, code, cb) {
-  fetch(CONFIG.emailWorkerUrl + '/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: account, code: code })
-  })
-    .then(function (r) {
-      return r
-        .json()
-        .catch(function () {
-          return { ok: false, msg: '服务响应异常' };
-        });
-    })
-    .then(cb)
-    .catch(function () {
-      cb({ ok: false, msg: '网络错误，请稍后重试' });
-    });
 }
 
 function finishRegister(name, account, password) {
@@ -1043,10 +872,7 @@ function finishRegister(name, account, password) {
       createdAt: Date.now()
     });
     saveAccounts(accounts);
-    pendingCode = null;
-    dom.codeNotice.hidden = true;
     dom.registerForm.reset();
-    updateSendBtn();
 
     /* 注册成功，跳转到登录并预填名字与账号 */
     switchLoginTab('login');
@@ -1390,7 +1216,6 @@ function init() {
   dom.year.textContent = String(new Date().getFullYear());
   document.title = CONFIG.siteName;
 
-  updateSendBtn();
   renderAll();
   resetResourceForm();
   resetContactForm();
