@@ -14,6 +14,8 @@ xuelang-resource-hub/
 ├── index.html   页面结构
 ├── style.css    全部样式
 ├── script.js    全部逻辑
+├── worker/
+│   └── worker.js 邮箱验证码服务（Cloudflare Worker，可选）
 └── README.md    说明文档
 ```
 
@@ -49,7 +51,7 @@ const CONFIG = {
 - 头像：站长登录后点击首页大头像即可更换（自动压缩后保存）
 - 首次进入会弹窗提示头像在哪里修改
 
-> **验证码说明**：本页是纯前端静态页面，无法真实发送邮件，因此验证码以「演示模式」直接显示在页面上（`script.js` 的 `handleSendCode` 函数）。部署到真实环境时，把该函数替换为调用你的邮件服务（如 QQ 邮箱 SMTP、Resend 等）即可，页面其它逻辑无需改动。
+> **验证码说明**：已接入真实邮件发送（Cloudflare Worker + QQ 邮箱 SMTP，见 `worker/worker.js`）。`CONFIG.emailWorkerUrl` 填写 Worker 地址后，注册验证码会真实发送到邮箱并由服务端校验；留空则退回「演示模式」（验证码直接显示在页面上）。Worker 需要在 Cloudflare 控制台创建，并配置两个机密变量 `SMTP_USER`（发件邮箱）与 `SMTP_AUTH`（邮箱 SMTP 授权码），部署步骤见 `worker/worker.js` 顶部注释。
 
 > **数据与安全说明**：注册账号、密码哈希与站点内容都保存在访问者浏览器的 localStorage 中，仅适合个人展示与演示用途，请勿存放敏感数据。密码使用「盐 + SHA-256」哈希存储（Web Crypto，不可用时回退 FNV-1a）。
 

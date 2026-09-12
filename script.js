@@ -15,7 +15,12 @@ const CONFIG = {
      由下方 DEFAULT_OWNER_ACCOUNT 在首次加载时自动写入，无需注册。 */
   ownerAccounts: ['3902041497@qq.com'],
   /* 站长邮箱 */
-  ownerEmail: '3902041497@qq.com'
+  ownerEmail: '3902041497@qq.com',
+  /* 邮箱验证码服务地址（Cloudflare Worker，见 worker/worker.js）。
+     留空 = 演示模式（验证码直接显示在页面上，不真实发邮件）；
+     填上 Worker 地址（如 https://email-code.xxxx.workers.dev）后 =
+     验证码真实发送到邮箱，并在服务端校验。 */
+  emailWorkerUrl: 'https://email-code.3902041497.workers.dev'
 };
 
 /* 预置站长账号：密码以「盐 + SHA-256（FNV-1a 兜底）」哈希保存，不存明文。
@@ -873,9 +878,9 @@ function startSendCountdown() {
 }
 
 /* 发送验证码。
-   说明：本页为纯前端静态页面，无法真实发送邮件，
-   因此验证码在页面下方直接展示（演示模式）。
-   部署到真实环境时，把本函数替换为调用你的邮件服务即可。 */
+   已配置 CONFIG.emailWorkerUrl 时：调用 Cloudflare Worker 真实发送邮件，
+   验证码由服务端生成并校验（前端拿不到，更安全）。
+   未配置时：演示模式，验证码直接显示在页面下方。 */
 function handleSendCode() {
   const check = validateAccount(dom.regAccount.value);
   if (!check.ok) {
@@ -886,10 +891,19 @@ function handleSendCode() {
     showToast('该账号已注册，请直接登录');
     return;
   }
+  if (CONFIG.emailWorkerUrl) {
+    sendCodeViaWorker(check.account);
+  } else {
+    demoSendCode(check.account);
+  }
+}
+
+function demoSendCode(account) {
   const code = generateCode();
   pendingCode = {
     code: code,
-    account: check.account,
+    account: account,
+    server: false,
     expiresAt: Date.now() + 5 * 60 * 1000
   };
   dom.codeNotice.hidden = false;
@@ -899,6 +913,45 @@ function handleSendCode() {
     '，5 分钟内有效';
   showToast('验证码已发送');
   startSendCountdown();
+}
+
+function sendCodeViaWorker(account) {
+  dom.sendCodeBtn.disabled = true;
+  dom.sendCodeBtn.textContent = '发送中…';
+  fetch(CONFIG.emailWorkerUrl + '/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: account })
+  })
+    .then(function (r) {
+      return r
+        .json()
+        .catch(function () {
+          return { ok: false, msg: '服务响应异常' };
+        });
+    })
+    .then(function (res) {
+      if (res && res.ok) {
+        pendingCode = {
+          code: null,
+          account: account,
+          server: true,
+          expiresAt: Date.now() + 5 * 60 * 1000
+        };
+        dom.codeNotice.hidden = false;
+        dom.codeNotice.textContent =
+          '验证码已发送到 ' + account + '，请查收邮件（5 分钟内有效）';
+        showToast('验证码已发送');
+        startSendCountdown();
+      } else {
+        showToast((res && res.msg) || '发送失败，请稍后重试');
+        updateSendBtn();
+      }
+    })
+    .catch(function () {
+      showToast('网络错误，发送失败');
+      updateSendBtn();
+    });
 }
 
 function submitRegister() {
@@ -934,20 +987,55 @@ function submitRegister() {
     showToast('验证码已过期，请重新获取');
     return;
   }
-  if (code !== pendingCode.code) {
-    showToast('验证码不正确');
-    return;
-  }
   if (findAccount(accCheck.account)) {
     showToast('该账号已注册，请直接登录');
     return;
   }
 
+  /* 真实邮件模式：验证码在服务端校验 */
+  if (pendingCode.server) {
+    verifyCodeViaWorker(accCheck.account, code, function (res) {
+      if (!(res && res.ok)) {
+        showToast((res && res.msg) || '验证码不正确');
+        return;
+      }
+      finishRegister(name, accCheck.account, password);
+    });
+    return;
+  }
+
+  if (code !== pendingCode.code) {
+    showToast('验证码不正确');
+    return;
+  }
+  finishRegister(name, accCheck.account, password);
+}
+
+function verifyCodeViaWorker(account, code, cb) {
+  fetch(CONFIG.emailWorkerUrl + '/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: account, code: code })
+  })
+    .then(function (r) {
+      return r
+        .json()
+        .catch(function () {
+          return { ok: false, msg: '服务响应异常' };
+        });
+    })
+    .then(cb)
+    .catch(function () {
+      cb({ ok: false, msg: '网络错误，请稍后重试' });
+    });
+}
+
+function finishRegister(name, account, password) {
   const salt = randomSalt();
   makeHashPair(salt, password).then(function (pair) {
     accounts.push({
       name: name,
-      account: accCheck.account,
+      account: account,
       salt: salt,
       passHash: pair.sha || pair.fnv,
       passHashFnv: pair.fnv,
@@ -962,7 +1050,7 @@ function submitRegister() {
     /* 注册成功，跳转到登录并预填名字与账号 */
     switchLoginTab('login');
     dom.loginName.value = name;
-    dom.loginAccount.value = accCheck.account;
+    dom.loginAccount.value = account;
     showToast('注册成功，请登录');
   });
 }
