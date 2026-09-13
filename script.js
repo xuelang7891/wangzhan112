@@ -2,7 +2,8 @@
 
 /* =========================================================
    薛朗的资源仓库 - 脚本
-   纯原生 JS，无任何外部依赖；数据保存在浏览器 localStorage。
+   账号系统：Supabase Auth（邮箱注册 → 平台代发验证邮件 → 激活后登录）。
+   页面内容（资源 / 联系方式 / 资料 / 头像）保存在浏览器 localStorage。
    ========================================================= */
 
 /* =========================================================
@@ -10,22 +11,14 @@
    ========================================================= */
 const CONFIG = {
   siteName: '薛朗的资源仓库',
-  /* 站长账号：使用这些邮箱 / 手机号登录后即可编辑本站内容。
-     站长账号已按站长要求预置（薛朗 / 3902041497@qq.com），
-     由下方 DEFAULT_OWNER_ACCOUNT 在首次加载时自动写入，无需注册。 */
+  /* 站长账号：使用这些邮箱登录后即可编辑本站内容 */
   ownerAccounts: ['3902041497@qq.com'],
   /* 站长邮箱 */
-  ownerEmail: '3902041497@qq.com'
-};
-
-/* 预置站长账号：密码以「盐 + SHA-256（FNV-1a 兜底）」哈希保存，不存明文。
-   如需更换站长账号，请同步修改本常量与 CONFIG.ownerAccounts。 */
-const DEFAULT_OWNER_ACCOUNT = {
-  name: '薛朗',
-  account: '3902041497@qq.com',
-  salt: 'j55x9nfxmtxut2nz',
-  passHash: '7785e0cc3b253ea8b315d765e7786ccd414b9fdc57406283a3e9ee7270088140',
-  passHashFnv: 'fee27e29'
+  ownerEmail: '3902041497@qq.com',
+  /* Supabase 项目配置（浏览器安全密钥，可公开）：
+     在 Supabase 控制台「Project Settings → API Keys」获取 */
+  supabaseUrl: 'https://ojiueppupuhctqbvjagk.supabase.co',
+  supabaseAnonKey: 'sb_publishable_WQbN7g7WZYT--YHcoNi4rg_wTfLvE6P'
 };
 
 /* =========================================================
@@ -33,7 +26,6 @@ const DEFAULT_OWNER_ACCOUNT = {
    ========================================================= */
 const STORAGE_KEY = 'xl-resource-hub-v1';
 const SESSION_KEY = 'xl-resource-hub-session-v1';
-const ACCOUNTS_KEY = 'xl-resource-hub-accounts-v1';
 const WELCOME_KEY = 'xl-resource-hub-welcome-v1';
 
 /* 默认头像（内联 SVG，不依赖任何外部图片） */
@@ -105,7 +97,22 @@ function defaultState() {
    ========================================================= */
 let state;
 let session = null;
-let accounts = [];
+
+/* --- Supabase 客户端（CDN 加载失败时降级，登录/注册会提示刷新） --- */
+let supabaseClient = null;
+
+function initSupabase() {
+  try {
+    if (typeof window.supabase === 'undefined') return false;
+    supabaseClient = window.supabase.createClient(
+      CONFIG.supabaseUrl,
+      CONFIG.supabaseAnonKey
+    );
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
 
 function loadState() {
   const base = defaultState();
@@ -158,109 +165,43 @@ function saveSession() {
   }
 }
 
-/* 预置站长账号：首次加载自动写入，已存在则跳过（密码为加盐哈希，不存明文） */
-function seedOwnerAccount() {
-  if (!findAccount(DEFAULT_OWNER_ACCOUNT.account)) {
-    accounts.push({
-      name: DEFAULT_OWNER_ACCOUNT.name,
-      account: DEFAULT_OWNER_ACCOUNT.account,
-      salt: DEFAULT_OWNER_ACCOUNT.salt,
-      passHash: DEFAULT_OWNER_ACCOUNT.passHash,
-      passHashFnv: DEFAULT_OWNER_ACCOUNT.passHashFnv,
-      createdAt: 0
-    });
-    saveAccounts(accounts);
-  }
-}
-
 function isOwner() {
   return !!(session && session.isOwner);
 }
 
-/* =========================================================
-   账号存储与密码哈希
-   ========================================================= */
-function loadAccounts() {
+/* 从 Supabase 会话恢复本站登录态（刷新页面后保持登录） */
+async function restoreSupabaseSession() {
+  if (!supabaseClient) return;
   try {
-    const raw = localStorage.getItem(ACCOUNTS_KEY);
-    if (!raw) return [];
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? list : [];
-  } catch (err) {
-    return [];
-  }
-}
-
-function saveAccounts(list) {
-  try {
-    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list));
-  } catch (err) {
-    /* 存储不可用时仅保留内存数据 */
-  }
-}
-
-/* 按账号（邮箱）查找用户，忽略大小写 */
-function findAccount(account) {
-  const acc = (account || '').trim().toLowerCase();
-  return accounts.find(function (a) {
-    return a.account.toLowerCase() === acc;
-  }) || null;
-}
-
-function randomSalt() {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-}
-
-/* FNV-1a 哈希（简单环境兜底用，仅演示用途） */
-function fnv1a(text) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(16);
-}
-
-/* 加盐哈希对：SHA-256（Web Crypto 可用时）+ FNV-1a（兜底），兼容不同运行环境 */
-async function makeHashPair(salt, password) {
-  const text = salt + ':' + password;
-  const fnv = fnv1a(text);
-  let sha = null;
-  try {
-    if (window.crypto && window.crypto.subtle) {
-      const data = new TextEncoder().encode(text);
-      const buf = await window.crypto.subtle.digest('SHA-256', data);
-      sha = Array.from(new Uint8Array(buf))
-        .map(function (b) {
-          return b.toString(16).padStart(2, '0');
-        })
-        .join('');
+    const { data } = await supabaseClient.auth.getSession();
+    const sbUser = data && data.session && data.session.user;
+    if (!sbUser || !sbUser.email) {
+      if (session) {
+        session = null;
+        saveSession();
+        renderAll();
+      }
+      return;
     }
-  } catch (err) {
-    /* 仅使用 FNV */
-  }
-  return { sha: sha, fnv: fnv };
-}
-
-/* 校验密码：FNV 或 SHA-256 任一匹配即通过 */
-async function checkPassword(rec, password) {
-  const text = rec.salt + ':' + password;
-  if (rec.passHashFnv === fnv1a(text)) return true;
-  try {
-    if (window.crypto && window.crypto.subtle) {
-      const data = new TextEncoder().encode(text);
-      const buf = await window.crypto.subtle.digest('SHA-256', data);
-      const sha = Array.from(new Uint8Array(buf))
-        .map(function (b) {
-          return b.toString(16).padStart(2, '0');
+    const email = sbUser.email.trim().toLowerCase();
+    const metaName =
+      (sbUser.user_metadata && sbUser.user_metadata.name) || '';
+    const isOwnerAccount =
+      CONFIG.ownerAccounts
+        .map(function (a) {
+          return a.trim().toLowerCase();
         })
-        .join('');
-      return sha === rec.passHash;
-    }
+        .indexOf(email) !== -1;
+    session = {
+      account: email,
+      name: metaName || email.split('@')[0],
+      isOwner: isOwnerAccount
+    };
+    saveSession();
+    renderAll();
   } catch (err) {
-    /* 继续返回 false */
+    /* Supabase 不可达时保持本地会话 */
   }
-  return false;
 }
 
 /* =========================================================
@@ -368,6 +309,9 @@ function cacheDom() {
   dom.regName = document.getElementById('regName');
   dom.regAccount = document.getElementById('regAccount');
   dom.regPassword = document.getElementById('regPassword');
+  dom.regSuccess = document.getElementById('regSuccess');
+  dom.regSuccessText = document.getElementById('regSuccessText');
+  dom.regSuccessBack = document.getElementById('regSuccessBack');
 
   dom.tabLogin = document.getElementById('tabLogin');
   dom.tabRegister = document.getElementById('tabRegister');
@@ -613,6 +557,11 @@ function bindEvents() {
   });
 
   dom.menuLogout.addEventListener('click', function () {
+    if (supabaseClient) {
+      supabaseClient.auth.signOut().catch(function () {
+        /* 网络失败也继续退出本地会话 */
+      });
+    }
     session = null;
     saveSession();
     dom.accountMenu.hidden = true;
@@ -741,6 +690,9 @@ function bindEvents() {
   dom.goRegister.addEventListener('click', function () {
     switchLoginTab('register');
   });
+  dom.regSuccessBack.addEventListener('click', function () {
+    switchLoginTab('login');
+  });
 
   /* --- 弹窗通用 --- */
   document.querySelectorAll('[data-close]').forEach(function (btn) {
@@ -814,6 +766,7 @@ function switchLoginTab(tab) {
   dom.registerForm.hidden = isLogin;
   dom.loginHint.hidden = !isLogin;
   dom.registerHint.hidden = isLogin;
+  dom.regSuccess.hidden = true;
   dom.tabLogin.classList.toggle('active', isLogin);
   dom.tabRegister.classList.toggle('active', !isLogin);
   dom.tabLogin.setAttribute('aria-selected', String(isLogin));
@@ -825,6 +778,9 @@ function switchLoginTab(tab) {
   }
 }
 
+/* =========================================================
+   7.5 登录 / 注册（Supabase 邮箱账号系统）
+   ========================================================= */
 function openLoginModal(tab) {
   switchLoginTab(tab || 'login');
   openModal('loginModal');
@@ -835,7 +791,7 @@ function openLoginModal(tab) {
   }, 50);
 }
 
-function submitRegister() {
+async function submitRegister() {
   const name = dom.regName.value.trim();
   const account = dom.regAccount.value.trim();
   const password = dom.regPassword.value;
@@ -853,44 +809,46 @@ function submitRegister() {
     showToast('密码至少 6 位');
     return;
   }
-  if (findAccount(accCheck.account)) {
-    showToast('该账号已注册，请直接登录');
+  if (!supabaseClient) {
+    showToast('账号系统未加载，请刷新页面重试');
     return;
   }
-  finishRegister(name, accCheck.account, password);
-}
 
-function finishRegister(name, account, password) {
-  const salt = randomSalt();
-  makeHashPair(salt, password).then(function (pair) {
-    accounts.push({
-      name: name,
-      account: account,
-      salt: salt,
-      passHash: pair.sha || pair.fnv,
-      passHashFnv: pair.fnv,
-      createdAt: Date.now()
+  const btn = dom.registerForm.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const { error } = await supabaseClient.auth.signUp({
+      email: accCheck.account,
+      password: password,
+      options: { data: { name: name } }
     });
-    saveAccounts(accounts);
+    if (error) {
+      const msg = error.message || '';
+      if (/already registered|already been registered/i.test(msg)) {
+        showToast('该邮箱已注册，请直接登录');
+      } else {
+        showToast('注册失败：' + msg);
+      }
+      return;
+    }
+    /* 注册成功：平台已向邮箱发送验证邮件 */
     dom.registerForm.reset();
-
-    /* 注册成功，跳转到登录并预填名字与账号 */
-    switchLoginTab('login');
-    dom.loginName.value = name;
-    dom.loginAccount.value = account;
-    showToast('注册成功，请登录');
-  });
+    dom.regSuccessText.textContent =
+      '验证邮件已发送到 ' + accCheck.account + '，请前往邮箱点击确认链接激活账号，激活后即可登录。';
+    dom.registerForm.hidden = true;
+    dom.regSuccess.hidden = false;
+  } catch (err) {
+    showToast('网络错误，请稍后重试');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
-function submitLogin() {
+async function submitLogin() {
   const name = dom.loginName.value.trim();
   const account = dom.loginAccount.value.trim();
   const password = dom.loginPassword.value;
 
-  if (!name) {
-    showToast('请填写名字');
-    return;
-  }
   const accCheck = validateAccount(account);
   if (!accCheck.ok) {
     showToast(accCheck.msg);
@@ -900,22 +858,32 @@ function submitLogin() {
     showToast('请输入密码');
     return;
   }
-
-  const rec = findAccount(accCheck.account);
-  if (!rec) {
-    showToast('该账号尚未注册，请先注册');
-    return;
-  }
-  if (rec.name.toLowerCase() !== name.toLowerCase()) {
-    showToast('名字与账号不匹配');
+  if (!supabaseClient) {
+    showToast('账号系统未加载，请刷新页面重试');
     return;
   }
 
-  checkPassword(rec, password).then(function (ok) {
-    if (!ok) {
-      showToast('密码不正确');
+  const btn = dom.loginForm.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email: accCheck.account,
+      password: password
+    });
+    if (error) {
+      const msg = error.message || '';
+      if (/not confirmed/i.test(msg)) {
+        showToast('该邮箱尚未激活，请先点击邮件里的验证链接');
+      } else if (/invalid login credentials/i.test(msg)) {
+        showToast('邮箱或密码错误');
+      } else {
+        showToast('登录失败：' + msg);
+      }
       return;
     }
+    const user = data.user;
+    const metaName =
+      (user && user.user_metadata && user.user_metadata.name) || '';
     const isOwnerAccount =
       CONFIG.ownerAccounts
         .map(function (a) {
@@ -923,14 +891,25 @@ function submitLogin() {
         })
         .indexOf(accCheck.account) !== -1;
 
-    session = { account: accCheck.account, name: rec.name, isOwner: isOwnerAccount };
+    session = {
+      account: accCheck.account,
+      name: metaName || name || accCheck.account.split('@')[0],
+      isOwner: isOwnerAccount
+    };
     saveSession();
+    dom.loginForm.reset();
     closeModal('loginModal');
     renderAll();
     showToast(
-      isOwnerAccount ? '站长登录成功，现在可以编辑内容了' : '欢迎回来，' + rec.name
+      isOwnerAccount
+        ? '站长登录成功，现在可以编辑内容了'
+        : '欢迎回来，' + (metaName || name)
     );
-  });
+  } catch (err) {
+    showToast('网络错误，请稍后重试');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* =========================================================
@@ -1205,8 +1184,8 @@ function markWelcomeShown() {
 function init() {
   state = loadState();
   session = loadSession();
-  accounts = loadAccounts();
-  seedOwnerAccount();
+  initSupabase();
+  restoreSupabaseSession();
 
   cacheDom();
   bindEvents();

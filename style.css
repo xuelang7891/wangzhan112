@@ -1019,6 +1019,31 @@ textarea.input {
   cursor: not-allowed;
 }
 
+/* ---------- 注册成功（验证邮件已发送） ---------- */
+.reg-success {
+  padding: 22px 8px 8px;
+  text-align: center;
+}
+
+.reg-success-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.reg-success-text {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-2);
+  word-break: break-all;
+}
+
+.reg-success .btn {
+  margin-top: 18px;
+}
+
+
 /* =========================================================
    响应式：手机端
    ========================================================= */

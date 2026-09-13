@@ -159,11 +159,11 @@
       <button class="tab-btn active" id="tabLogin" type="button" role="tab" aria-selected="true">登录</button>
       <button class="tab-btn" id="tabRegister" type="button" role="tab" aria-selected="false">注册</button>
     </div>
-    <p class="modal-sub">注册后使用名字、邮箱与密码登录。</p>
+    <p class="modal-sub">邮箱注册，验证邮件激活后即可登录。</p>
 
     <form id="loginForm" novalidate>
       <div class="field">
-        <label for="loginName">名字</label>
+        <label for="loginName">名字（选填）</label>
         <input class="input" id="loginName" type="text" placeholder="请输入你的名字" maxlength="20" autocomplete="name">
       </div>
       <div class="field">
@@ -193,6 +193,11 @@
       </div>
       <button class="btn btn-primary btn-block" type="submit">注册</button>
     </form>
+    <div class="reg-success" id="regSuccess" hidden>
+      <p class="reg-success-title">验证邮件已发送</p>
+      <p class="reg-success-text" id="regSuccessText"></p>
+      <button class="btn btn-ghost btn-block" type="button" id="regSuccessBack">返回登录</button>
+    </div>
     <p class="modal-hint" id="registerHint" hidden>已有账号？<button class="link-btn" id="goLogin" type="button">去登录</button></p>
   </div>
 </div>
@@ -260,6 +265,8 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+<!-- Supabase 邮箱账号系统（平台代发验证邮件，国内可访问） -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
