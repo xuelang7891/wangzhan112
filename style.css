@@ -1083,6 +1083,52 @@ textarea.input {
   gap: 10px;
 }
 
+/* ---------- QQ 群加入弹窗 ---------- */
+.qun-number-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.qun-number {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  word-break: break-all;
+}
+
+.qun-number-row .btn {
+  padding: 8px 16px;
+  font-size: 13.5px;
+  flex-shrink: 0;
+}
+
+.qun-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.qun-note {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-2);
+  margin-bottom: 16px;
+  white-space: pre-wrap;
+}
+
+.qun-note:empty {
+  margin-bottom: 0;
+}
+
 
 /* =========================================================
    响应式：手机端

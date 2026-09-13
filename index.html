@@ -135,9 +135,9 @@
   <section class="section section-join" id="join">
     <div class="container join-inner">
       <h2>加入薛朗的资源仓库</h2>
-      <p class="join-text">如果你有值得分享的网站、工具或内容，注册一个账号即可加入这个资源仓库，一起把这份收藏维护得更好。</p>
-      <button class="btn btn-primary btn-lg" id="joinBtn" type="button">注册并加入</button>
-      <p class="join-hint">站长账号注册并登录后，可在线管理资源与联系方式</p>
+      <p class="join-text">欢迎加入薛朗的资源仓库 QQ 群，一起分享与交流值得收藏的网站、工具和内容。</p>
+      <button class="btn btn-primary btn-lg" id="joinBtn" type="button">加入</button>
+      <p class="join-hint">站长登录后可修改群号、群名称与群备注</p>
     </div>
   </section>
 
@@ -314,6 +314,48 @@
       <button class="btn btn-ghost" type="button" data-close="confirmModal">取消</button>
       <button class="btn btn-danger" type="button" id="confirmOkBtn">删除</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== QQ 群加入弹窗 ===== -->
+<div class="modal-mask" id="joinModal" hidden>
+  <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="joinModalTitle">
+    <button class="modal-close" type="button" data-close="joinModal" aria-label="关闭加入弹窗">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+    </button>
+    <h3 class="modal-title" id="joinModalTitle">加入薛朗的资源仓库</h3>
+    <p class="modal-sub">在 QQ 中搜索群号即可加入，欢迎一起来玩。</p>
+
+    <!-- 展示区 -->
+    <div id="qunView">
+      <div class="qun-number-row">
+        <span class="qun-number" id="qunNumber"></span>
+        <button class="btn btn-ghost" id="qunCopyBtn" type="button">复制群号</button>
+      </div>
+      <p class="qun-name" id="qunName"></p>
+      <p class="qun-note" id="qunNote"></p>
+      <button class="btn btn-primary btn-block owner-only" id="qunEditBtn" type="button">编辑群信息</button>
+    </div>
+
+    <!-- 编辑区（仅站长可见） -->
+    <form id="qunForm" novalidate hidden>
+      <div class="field">
+        <label for="qunNumberInput">群号</label>
+        <input class="input" id="qunNumberInput" type="text" placeholder="请输入 QQ 群号" maxlength="20" aria-label="QQ 群号">
+      </div>
+      <div class="field">
+        <label for="qunNameInput">群名称</label>
+        <input class="input" id="qunNameInput" type="text" placeholder="请输入群名称" maxlength="40" aria-label="群名称">
+      </div>
+      <div class="field">
+        <label for="qunNoteInput">群备注</label>
+        <textarea class="input" id="qunNoteInput" rows="3" placeholder="入群须知、欢迎语等（可选）" maxlength="200" aria-label="群备注"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" type="button" id="qunCancelBtn">取消</button>
+        <button class="btn btn-primary" type="submit">保存</button>
+      </div>
+    </form>
   </div>
 </div>
 

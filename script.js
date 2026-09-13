@@ -88,7 +88,12 @@ function defaultState() {
     contacts: [
       { id: createId(), label: '邮箱', url: 'mailto:3902041497@qq.com' },
       { id: createId(), label: 'GitHub', url: 'https://example.com/github' }
-    ]
+    ],
+    qqGroup: {
+      number: '',
+      name: '',
+      note: ''
+    }
   };
 }
 
@@ -123,7 +128,8 @@ function loadState() {
     return {
       profile: Object.assign({}, base.profile, saved.profile || {}),
       resources: Array.isArray(saved.resources) ? saved.resources : base.resources,
-      contacts: Array.isArray(saved.contacts) ? saved.contacts : base.contacts
+      contacts: Array.isArray(saved.contacts) ? saved.contacts : base.contacts,
+      qqGroup: Object.assign({}, base.qqGroup, saved.qqGroup || {})
     };
   } catch (err) {
     return base;
@@ -292,6 +298,19 @@ function cacheDom() {
   dom.addResourceBtn = document.getElementById('addResourceBtn');
 
   dom.joinBtn = document.getElementById('joinBtn');
+
+  dom.joinModal = document.getElementById('joinModal');
+  dom.qunView = document.getElementById('qunView');
+  dom.qunNumber = document.getElementById('qunNumber');
+  dom.qunName = document.getElementById('qunName');
+  dom.qunNote = document.getElementById('qunNote');
+  dom.qunCopyBtn = document.getElementById('qunCopyBtn');
+  dom.qunEditBtn = document.getElementById('qunEditBtn');
+  dom.qunForm = document.getElementById('qunForm');
+  dom.qunNumberInput = document.getElementById('qunNumberInput');
+  dom.qunNameInput = document.getElementById('qunNameInput');
+  dom.qunNoteInput = document.getElementById('qunNoteInput');
+  dom.qunCancelBtn = document.getElementById('qunCancelBtn');
 
   dom.contactList = document.getElementById('contactList');
   dom.contactForm = document.getElementById('contactForm');
@@ -683,9 +702,26 @@ function bindEvents() {
     }
   });
 
-  /* --- 加入资源仓库：打开注册 --- */
-  dom.joinBtn.addEventListener('click', function () {
-    openLoginModal('register');
+  /* --- 加入资源仓库：打开 QQ 群弹窗 --- */
+  dom.joinBtn.addEventListener('click', openJoinModal);
+
+  /* --- QQ 群弹窗：复制群号 / 编辑群信息 --- */
+  dom.qunCopyBtn.addEventListener('click', copyQunNumber);
+  dom.qunEditBtn.addEventListener('click', function () {
+    dom.qunNumberInput.value = state.qqGroup.number || '';
+    dom.qunNameInput.value = state.qqGroup.name || '';
+    dom.qunNoteInput.value = state.qqGroup.note || '';
+    dom.qunView.hidden = true;
+    dom.qunForm.hidden = false;
+    dom.qunNumberInput.focus();
+  });
+  dom.qunCancelBtn.addEventListener('click', function () {
+    dom.qunForm.hidden = true;
+    dom.qunView.hidden = false;
+  });
+  dom.qunForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    submitQunForm();
   });
 
   /* --- 登录：名字 + 邮箱/手机号 + 密码 --- */
@@ -1379,6 +1415,64 @@ function fallbackCopy(text) {
   } catch (err) {
     /* 忽略 */
   }
+}
+
+/* =========================================================
+   9.6 QQ 群加入弹窗（群号 / 群名称 / 群备注，站长可改）
+   ========================================================= */
+function openJoinModal() {
+  dom.qunForm.hidden = true;
+  dom.qunView.hidden = false;
+  const q = state.qqGroup || {};
+  if (q.number) {
+    dom.qunNumber.textContent = 'QQ 群号：' + q.number;
+    dom.qunCopyBtn.hidden = false;
+  } else {
+    dom.qunNumber.textContent = '群信息待站长填写';
+    dom.qunCopyBtn.hidden = true;
+  }
+  dom.qunName.textContent = q.name || '';
+  dom.qunName.hidden = !q.name;
+  dom.qunNote.textContent = q.note || '';
+  dom.qunNote.hidden = !q.note;
+  openModal('joinModal');
+}
+
+function copyQunNumber() {
+  const num = (state.qqGroup && state.qqGroup.number) || '';
+  if (!num) return;
+  const done = function () {
+    showToast('群号已复制，去 QQ 搜索加入吧');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(num).then(done).catch(function () {
+      fallbackCopy(num);
+      done();
+    });
+  } else {
+    fallbackCopy(num);
+    done();
+  }
+}
+
+function submitQunForm() {
+  if (!isOwner()) {
+    showToast('仅站长可修改群信息');
+    return;
+  }
+  const number = dom.qunNumberInput.value.trim();
+  if (!number) {
+    showToast('请填写群号');
+    return;
+  }
+  state.qqGroup.number = number;
+  state.qqGroup.name = dom.qunNameInput.value.trim();
+  state.qqGroup.note = dom.qunNoteInput.value.trim();
+  saveState();
+  dom.qunForm.hidden = true;
+  dom.qunView.hidden = false;
+  openJoinModal();
+  showToast('群信息已保存');
 }
 
 function markWelcomeShown() {
