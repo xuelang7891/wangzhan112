@@ -18,7 +18,10 @@ xuelang-resource-hub/
 ├── script.js       全部逻辑
 ├── manifest.json   PWA 清单（添加到主屏幕）
 ├── sw.js           Service Worker（离线缓存）
-├── icons/          应用图标（180 / 192 / 512）
+├── 404.html        友好 404 页面（自动跳回首页）
+├── sitemap.xml     站点地图（提交搜索引擎收录）
+├── robots.txt      爬虫规则
+├── icons/          应用图标（180 / 192 / 512）+ 分享卡片 og-cover.png
 └── README.md       说明文档
 ```
 
@@ -89,6 +92,7 @@ const CONFIG = {
 MIT
 
 > **更新记录**：
+> - 2026-09-13 网站完善：OG 分享卡片（微信/QQ 转发显示标题+简介+缩略图）、忘记密码（重置邮件 → 回站设置新密码）、友好 404 页面、sitemap.xml + robots.txt（SEO 收录）。
 > - 2026-09-13 新增 PWA 支持（manifest + 图标 + Service Worker），可添加到手机主屏幕获得 App 体验。
 > - 2026-09-13 接入 Supabase 邮箱账号系统：注册 → 平台代发验证邮件 → 点链接激活 → 邮箱 + 密码登录（Firebase 因国内不可访问未采用）。
 > - 2026-09-12 移除邮箱验证码（QQ 邮箱 SMTP 在海外服务器被拦截，导致邮件无法发送）。

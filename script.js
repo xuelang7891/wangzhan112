@@ -320,6 +320,16 @@ function cacheDom() {
   dom.goLogin = document.getElementById('goLogin');
   dom.goRegister = document.getElementById('goRegister');
 
+  dom.forgotLink = document.getElementById('forgotLink');
+  dom.forgotPanel = document.getElementById('forgotPanel');
+  dom.forgotForm = document.getElementById('forgotForm');
+  dom.forgotAccount = document.getElementById('forgotAccount');
+  dom.forgotBackBtn = document.getElementById('forgotBackBtn');
+  dom.resetPanel = document.getElementById('resetPanel');
+  dom.resetForm = document.getElementById('resetForm');
+  dom.resetPassword = document.getElementById('resetPassword');
+  dom.resetPassword2 = document.getElementById('resetPassword2');
+
   dom.profileForm = document.getElementById('profileForm');
   dom.profileAvatar = document.getElementById('profileAvatar');
   dom.profileAvatarBtn = document.getElementById('profileAvatarBtn');
@@ -694,6 +704,22 @@ function bindEvents() {
     switchLoginTab('login');
   });
 
+  /* --- 忘记密码：打开面板 / 发送重置邮件 / 返回登录 --- */
+  dom.forgotLink.addEventListener('click', openForgotPanel);
+  dom.forgotForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    submitResetPassword();
+  });
+  dom.forgotBackBtn.addEventListener('click', function () {
+    switchLoginTab('login');
+  });
+
+  /* --- 设置新密码：邮件链接跳回网站后提交 --- */
+  dom.resetForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    submitNewPassword();
+  });
+
   /* --- 弹窗通用 --- */
   document.querySelectorAll('[data-close]').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -767,6 +793,8 @@ function switchLoginTab(tab) {
   dom.loginHint.hidden = !isLogin;
   dom.registerHint.hidden = isLogin;
   dom.regSuccess.hidden = true;
+  dom.forgotPanel.hidden = true;
+  dom.resetPanel.hidden = true;
   dom.tabLogin.classList.toggle('active', isLogin);
   dom.tabRegister.classList.toggle('active', !isLogin);
   dom.tabLogin.setAttribute('aria-selected', String(isLogin));
@@ -912,6 +940,121 @@ async function submitLogin() {
   }
 }
 
+/* =========================================================
+   7.6 忘记密码 / 重置密码（Supabase resetPasswordForEmail）
+   ========================================================= */
+function openForgotPanel() {
+  dom.loginForm.hidden = true;
+  dom.registerForm.hidden = true;
+  dom.loginHint.hidden = true;
+  dom.registerHint.hidden = true;
+  dom.regSuccess.hidden = true;
+  dom.resetPanel.hidden = true;
+  dom.forgotPanel.hidden = false;
+  dom.forgotForm.reset();
+  setTimeout(function () {
+    dom.forgotAccount.focus();
+  }, 50);
+}
+
+async function submitResetPassword() {
+  const account = dom.forgotAccount.value.trim();
+  const accCheck = validateAccount(account);
+  if (!accCheck.ok) {
+    showToast(accCheck.msg);
+    return;
+  }
+  if (!supabaseClient) {
+    showToast('账号系统未加载，请刷新页面重试');
+    return;
+  }
+  const btn = dom.forgotForm.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    /* 重置链接跳回本站首页，再由页面识别 token 进入「设置新密码」面板 */
+    const redirectTo = window.location.origin + window.location.pathname;
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(
+      accCheck.account,
+      { redirectTo: redirectTo }
+    );
+    if (error) {
+      const msg = error.message || '';
+      if (/rate limit|too many|over_request_rate_limit/i.test(msg)) {
+        showToast('发送太频繁，请等几分钟再试');
+      } else {
+        showToast('发送失败：' + msg);
+      }
+      return;
+    }
+    showToast('重置邮件已发送，请前往邮箱查看');
+    switchLoginTab('login');
+  } catch (err) {
+    showToast('网络错误，请稍后重试');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* 从重置邮件链接跳回网站时，Supabase 触发 PASSWORD_RECOVERY 事件 */
+function openResetPanel() {
+  switchLoginTab('login');
+  dom.loginForm.hidden = true;
+  dom.registerForm.hidden = true;
+  dom.loginHint.hidden = true;
+  dom.registerHint.hidden = true;
+  dom.regSuccess.hidden = true;
+  dom.forgotPanel.hidden = true;
+  dom.resetPanel.hidden = false;
+  openModal('loginModal');
+  setTimeout(function () {
+    dom.resetPassword.focus();
+  }, 60);
+}
+
+async function submitNewPassword() {
+  const p1 = dom.resetPassword.value;
+  const p2 = dom.resetPassword2.value;
+  if (p1.length < 6) {
+    showToast('密码至少 6 位');
+    return;
+  }
+  if (p1 !== p2) {
+    showToast('两次输入的密码不一致');
+    return;
+  }
+  if (!supabaseClient) {
+    showToast('账号系统未加载，请刷新页面重试');
+    return;
+  }
+  const btn = dom.resetForm.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: p1 });
+    if (error) {
+      showToast('修改失败：' + (error.message || ''));
+      return;
+    }
+    dom.resetForm.reset();
+    switchLoginTab('login');
+    showToast('密码已更新，请用新密码登录');
+  } catch (err) {
+    showToast('网络错误，请稍后重试');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* 监听 Supabase 认证事件：重置邮件链接回站时打开「设置新密码」面板 */
+function listenAuthState() {
+  if (!supabaseClient) return;
+  try {
+    supabaseClient.auth.onAuthStateChange(function (event) {
+      if (event === 'PASSWORD_RECOVERY') openResetPanel();
+    });
+  } catch (err) {
+    /* 忽略：监听失败仅失去自动弹出改密面板的能力 */
+  }
+}
 /* =========================================================
    8. 业务操作
    ========================================================= */
@@ -1189,6 +1332,7 @@ function init() {
 
   cacheDom();
   bindEvents();
+  listenAuthState();
 
   dom.brandName.textContent = CONFIG.siteName;
   dom.footerSite.textContent = CONFIG.siteName;

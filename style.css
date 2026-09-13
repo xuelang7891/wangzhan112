@@ -1043,6 +1043,26 @@ textarea.input {
   margin-top: 18px;
 }
 
+/* ---------- 忘记密码 / 设置新密码 ---------- */
+.forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 14px;
+}
+
+.forgot-row .link-btn {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.auth-panel {
+  padding: 4px 0 0;
+}
+
+.auth-panel .modal-title {
+  margin-bottom: 6px;
+}
+
 
 /* =========================================================
    响应式：手机端

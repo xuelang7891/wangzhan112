@@ -4,13 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>薛朗的资源仓库</title>
-<meta name="description" content="薛朗的资源仓库：精选网站与链接分享，欢迎加入。">
+<meta name="description" content="薛朗的资源仓库：精选网站与链接分享，欢迎浏览与加入。">
 <meta name="theme-color" content="#0E7C66">
+<!-- ===== 分享卡片（微信 / QQ / 微博转发时显示标题 + 简介 + 缩略图） ===== -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="薛朗的资源仓库">
+<meta property="og:title" content="薛朗的资源仓库">
+<meta property="og:description" content="薛朗的资源仓库：精选网站与链接分享，欢迎浏览与加入。">
+<meta property="og:url" content="https://wangzhan112.pages.dev/">
+<meta property="og:image" content="https://wangzhan112.pages.dev/icons/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="薛朗的资源仓库">
+<meta name="twitter:description" content="薛朗的资源仓库：精选网站与链接分享，欢迎浏览与加入。">
+<meta name="twitter:image" content="https://wangzhan112.pages.dev/icons/og-cover.png">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-head.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="stylesheet" href="style.css">
+<!-- ===== 访问统计：Cloudflare Web Analytics（拿到 token 后取消注释填入） ===== -->
+<!--
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"你的TOKEN"}'></script>
+-->
 </head>
 <body>
 
@@ -179,6 +196,9 @@
         <label for="loginPassword">密码</label>
         <input class="input" id="loginPassword" type="password" placeholder="请输入密码" autocomplete="current-password">
       </div>
+      <div class="forgot-row">
+        <button class="link-btn" id="forgotLink" type="button">忘记密码？</button>
+      </div>
       <button class="btn btn-primary btn-block" type="submit">登录</button>
     </form>
     <p class="modal-hint" id="loginHint">还没有账号？<button class="link-btn" id="goRegister" type="button">立即注册</button></p>
@@ -204,6 +224,37 @@
       <button class="btn btn-ghost btn-block" type="button" id="regSuccessBack">返回登录</button>
     </div>
     <p class="modal-hint" id="registerHint" hidden>已有账号？<button class="link-btn" id="goLogin" type="button">去登录</button></p>
+
+    <!-- ===== 忘记密码：输入邮箱，发送重置链接 ===== -->
+    <div class="auth-panel" id="forgotPanel" hidden>
+      <h3 class="modal-title">找回密码</h3>
+      <p class="modal-sub">输入注册时使用的邮箱，我们会把重置密码的链接发给你。</p>
+      <form id="forgotForm" novalidate>
+        <div class="field">
+          <label for="forgotAccount">邮箱</label>
+          <input class="input" id="forgotAccount" type="text" placeholder="请输入注册邮箱" autocomplete="username">
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">发送重置邮件</button>
+      </form>
+      <p class="modal-hint">想起密码了？<button class="link-btn" id="forgotBackBtn" type="button">返回登录</button></p>
+    </div>
+
+    <!-- ===== 设置新密码：点击邮件里的链接回到网站后出现 ===== -->
+    <div class="auth-panel" id="resetPanel" hidden>
+      <h3 class="modal-title">设置新密码</h3>
+      <p class="modal-sub">为你的账号设置一个新的登录密码。</p>
+      <form id="resetForm" novalidate>
+        <div class="field">
+          <label for="resetPassword">新密码</label>
+          <input class="input" id="resetPassword" type="password" placeholder="至少 6 位" autocomplete="new-password">
+        </div>
+        <div class="field">
+          <label for="resetPassword2">确认新密码</label>
+          <input class="input" id="resetPassword2" type="password" placeholder="再次输入新密码" autocomplete="new-password">
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">确认修改</button>
+      </form>
+    </div>
   </div>
 </div>
 
