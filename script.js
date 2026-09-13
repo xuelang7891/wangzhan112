@@ -182,11 +182,7 @@ async function restoreSupabaseSession() {
     const { data } = await supabaseClient.auth.getSession();
     const sbUser = data && data.session && data.session.user;
     if (!sbUser || !sbUser.email) {
-      if (session) {
-        session = null;
-        saveSession();
-        renderAll();
-      }
+      /* Supabase 无会话（本地/离线打开）时保留本地登录态，不覆盖 */
       return;
     }
     const email = sbUser.email.trim().toLowerCase();
@@ -298,6 +294,7 @@ function cacheDom() {
   dom.addResourceBtn = document.getElementById('addResourceBtn');
 
   dom.joinBtn = document.getElementById('joinBtn');
+  dom.editQunBtn = document.getElementById('editQunBtn');
 
   dom.joinModal = document.getElementById('joinModal');
   dom.qunView = document.getElementById('qunView');
@@ -390,7 +387,9 @@ function renderAll() {
 function renderNav() {
   dom.navAvatar.src = avatarSrc();
   if (session) {
-    dom.accountName.textContent = session.name;
+    /* 站长显示资料里改好的昵称；普通用户显示登录名 */
+    dom.accountName.textContent =
+      isOwner() && state.profile.nickname ? state.profile.nickname : session.name;
     dom.accountBtn.title = '已登录，点击打开菜单';
   } else {
     dom.accountName.textContent = '登录';
@@ -551,6 +550,9 @@ function buildContactItem(item) {
 /* =========================================================
    7. 事件绑定
    ========================================================= */
+/* 标记：从「加入」按钮进入登录流程，登录成功后自动弹出 QQ 群号 */
+let joinFlowPending = false;
+
 function bindEvents() {
   /* --- 移动端菜单 --- */
   dom.menuBtn.addEventListener('click', function () {
@@ -702,8 +704,18 @@ function bindEvents() {
     }
   });
 
-  /* --- 加入资源仓库：打开 QQ 群弹窗 --- */
-  dom.joinBtn.addEventListener('click', openJoinModal);
+  /* --- 加入资源仓库：未登录先登录，登录后自动弹 QQ 群；已登录直接看群号 --- */
+  dom.joinBtn.addEventListener('click', function () {
+    if (session) {
+      openJoinModal();
+    } else {
+      joinFlowPending = true;
+      openLoginModal('login');
+    }
+  });
+
+  /* --- 标题旁加号：站长直接编辑 QQ 群信息 --- */
+  dom.editQunBtn.addEventListener('click', openQunEditor);
 
   /* --- QQ 群弹窗：复制群号 / 编辑群信息 --- */
   dom.qunCopyBtn.addEventListener('click', copyQunNumber);
@@ -980,6 +992,11 @@ async function submitLogin() {
     dom.loginForm.reset();
     closeModal('loginModal');
     renderAll();
+    /* 从「加入」进入登录的，登录成功后直接弹出 QQ 群号 */
+    if (joinFlowPending) {
+      joinFlowPending = false;
+      openJoinModal();
+    }
     showToast(
       isOwnerAccount
         ? '站长登录成功，现在可以编辑内容了'
@@ -1438,8 +1455,21 @@ function openJoinModal() {
   openModal('joinModal');
 }
 
-function copyQunNumber() {
-  const num = (state.qqGroup && state.qqGroup.number) || '';
+/* 标题旁加号：站长直接打开群信息编辑表单 */
+function openQunEditor() {
+  if (!isOwner()) return;
+  dom.qunNumberInput.value = (state.qqGroup && state.qqGroup.number) || '';
+  dom.qunNameInput.value = (state.qqGroup && state.qqGroup.name) || '';
+  dom.qunNoteInput.value = (state.qqGroup && state.qqGroup.note) || '';
+  dom.qunView.hidden = true;
+  dom.qunForm.hidden = false;
+  openModal('joinModal');
+  setTimeout(function () {
+    dom.qunNumberInput.focus();
+  }, 80);
+}
+
+function copyQunNumber() {  const num = (state.qqGroup && state.qqGroup.number) || '';
   if (!num) return;
   const done = function () {
     showToast('群号已复制，去 QQ 搜索加入吧');

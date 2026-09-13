@@ -1129,6 +1129,21 @@ textarea.input {
   margin-bottom: 0;
 }
 
+/* ---------- 加入区标题行（标题 + 加号） ---------- */
+.join-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.join-head h2 {
+  margin: 0;
+}
+
+.join-head .add-btn {
+  position: static;
+}
+
 
 /* =========================================================
    响应式：手机端
