@@ -317,6 +317,23 @@
   </div>
 </div>
 
+<!-- ===== 联系邮箱弹窗 ===== -->
+<div class="modal-mask" id="mailModal" hidden>
+  <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="mailTitle">
+    <button class="modal-close" type="button" data-close="mailModal" aria-label="关闭联系邮箱弹窗">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+    </button>
+    <h3 class="modal-title" id="mailTitle">联系邮箱</h3>
+    <p class="modal-sub">把下面这个邮箱地址复制下来，或直接去写信。</p>
+    <p class="mail-address" id="mailAddress"></p>
+    <div class="mail-actions">
+      <button class="btn btn-primary btn-block" id="mailCopyBtn" type="button">复制邮箱地址</button>
+      <a class="btn btn-ghost btn-block" id="mailWebBtn" href="#" target="_blank" rel="noopener noreferrer" hidden>用 QQ 邮箱写信</a>
+    </div>
+    <p class="modal-hint">复制后粘贴到任意邮箱的收件人栏即可发送</p>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <!-- Supabase 邮箱账号系统（平台代发验证邮件，国内可访问） -->

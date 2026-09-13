@@ -340,6 +340,11 @@ function cacheDom() {
   dom.confirmText = document.getElementById('confirmText');
   dom.confirmOkBtn = document.getElementById('confirmOkBtn');
 
+  dom.mailModal = document.getElementById('mailModal');
+  dom.mailAddress = document.getElementById('mailAddress');
+  dom.mailCopyBtn = document.getElementById('mailCopyBtn');
+  dom.mailWebBtn = document.getElementById('mailWebBtn');
+
   dom.sections = Array.prototype.slice.call(
     document.querySelectorAll('section[id]')
   );
@@ -662,11 +667,19 @@ function bindEvents() {
 
   dom.contactList.addEventListener('click', function (e) {
     const btn = e.target.closest('[data-action]');
-    if (!btn || btn.dataset.type !== 'contact') return;
-    if (btn.dataset.action === 'delete') {
-      deleteItem('contacts', btn.dataset.id, '联系方式');
-    } else if (btn.dataset.action === 'edit') {
-      startEditContact(btn.dataset.id);
+    if (btn && btn.dataset.type === 'contact') {
+      if (btn.dataset.action === 'delete') {
+        deleteItem('contacts', btn.dataset.id, '联系方式');
+      } else if (btn.dataset.action === 'edit') {
+        startEditContact(btn.dataset.id);
+      }
+      return;
+    }
+    /* 点击邮箱联系方式：打开发邮件面板（mailto 依赖系统邮件客户端，多数环境静默失败） */
+    const mailLink = e.target.closest('a[href^="mailto:"]');
+    if (mailLink) {
+      e.preventDefault();
+      openMailPanel(mailLink.getAttribute('href'));
     }
   });
 
@@ -758,6 +771,9 @@ function bindEvents() {
     closeModal('confirmModal');
     if (cb) cb();
   });
+
+  /* --- 联系邮箱弹窗：复制邮箱地址 --- */
+  dom.mailCopyBtn.addEventListener('click', copyMailAddress);
 }
 
 function throttle(fn, wait) {
@@ -1311,6 +1327,58 @@ function askConfirm(text, callback) {
   dom.confirmText.textContent = text;
   dom.confirmOkBtn._cb = callback;
   openModal('confirmModal');
+}
+
+/* =========================================================
+   9.5 联系邮箱弹窗（mailto 依赖系统邮件客户端，改为复制 / 网页版写信）
+   ========================================================= */
+function openMailPanel(href) {
+  const email = String(href || '').replace(/^mailto:/i, '').split('?')[0];
+  if (!email) return;
+  dom.mailAddress.textContent = email;
+  /* QQ 邮箱 / Foxmail 提供「网页版写信」直达链接，其他邮箱隐藏该按钮 */
+  const isQQMail = /@(qq\.com|foxmail\.com)$/i.test(email);
+  dom.mailWebBtn.hidden = !isQQMail;
+  if (isQQMail) {
+    dom.mailWebBtn.href =
+      'https://mail.qq.com/cgi-bin/qm_share?t=qm_mailme&email=' +
+      encodeURIComponent(email);
+  }
+  openModal('mailModal');
+}
+
+function copyMailAddress() {
+  const text = dom.mailAddress.textContent;
+  if (!text) return;
+  const done = function () {
+    closeModal('mailModal');
+    showToast('邮箱地址已复制');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(function () {
+      fallbackCopy(text);
+      done();
+    });
+  } else {
+    fallbackCopy(text);
+    done();
+  }
+}
+
+/* 剪贴板 API 不可用时降级为临时输入框复制 */
+function fallbackCopy(text) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  } catch (err) {
+    /* 忽略 */
+  }
 }
 
 function markWelcomeShown() {
