@@ -15,6 +15,7 @@ const CORE = [
   './script.js',
   './manifest.json',
   './favicon.ico',
+  './icons/icon-head.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-180.png'
