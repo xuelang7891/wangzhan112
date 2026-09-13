@@ -5,6 +5,7 @@
 - 纯原生 HTML / CSS / JS，页面样式与逻辑分离（style.css / script.js）
 - 浅灰背景 + 深灰文字 + 单一青色强调色，简约、干净、现代
 - 响应式设计，适配手机与电脑屏幕
+- **PWA（路线 A）**：支持「添加到主屏幕」，手机桌面获得 App 图标 + 全屏独立窗口体验，离线可用
 - 账号系统：**Supabase Auth（邮箱注册）**，邮箱验证邮件由 Supabase 平台代发，账号数据存云端
 - 站点内容（资源 / 联系方式 / 资料 / 头像）保存在浏览器 localStorage
 
@@ -12,15 +13,20 @@
 
 ```
 xuelang-resource-hub/
-├── index.html   页面结构
-├── style.css    全部样式
-├── script.js    全部逻辑
-└── README.md    说明文档
+├── index.html      页面结构
+├── style.css       全部样式
+├── script.js       全部逻辑
+├── manifest.json   PWA 清单（添加到主屏幕）
+├── sw.js           Service Worker（离线缓存）
+├── icons/          应用图标（180 / 192 / 512）
+└── README.md       说明文档
 ```
 
 ## 快速开始
 
 直接用浏览器打开 `index.html` 即可使用（无需安装任何东西）。
+
+> PWA 提示：Service Worker 仅在 HTTPS 环境下生效（pages.dev 等线上环境正常）。本地用浏览器直接打开文件时无法注册，属正常现象，不影响浏览。
 
 ## 账号系统（Supabase，邮箱单选）
 
@@ -76,11 +82,13 @@ const CONFIG = {
 - 头像图片压缩到 512px 以内再存入 localStorage，避免超出存储限额
 - localStorage 不可用时自动降级为内存存储，页面不会报错
 - 支持键盘焦点、`prefers-reduced-motion`、移动端点击目标不小于 44px
+- PWA：`manifest.json` 提供主屏幕安装信息；`sw.js` 实现离线缓存（导航网络优先、静态资源缓存优先 + 后台更新，外部请求不缓存）
 
 ## License
 
 MIT
 
 > **更新记录**：
+> - 2026-09-13 新增 PWA 支持（manifest + 图标 + Service Worker），可添加到手机主屏幕获得 App 体验。
 > - 2026-09-13 接入 Supabase 邮箱账号系统：注册 → 平台代发验证邮件 → 点链接激活 → 邮箱 + 密码登录（Firebase 因国内不可访问未采用）。
 > - 2026-09-12 移除邮箱验证码（QQ 邮箱 SMTP 在海外服务器被拦截，导致邮件无法发送）。

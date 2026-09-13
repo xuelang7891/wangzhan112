@@ -1199,6 +1199,15 @@ function init() {
   resetResourceForm();
   resetContactForm();
 
+  /* PWA：注册 Service Worker（失败不影响页面正常使用） */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function () {
+        /* 忽略：不支持或注册失败时仅失去离线能力 */
+      });
+    });
+  }
+
   /* 首次进入：弹窗说明头像在哪里修改 */
   let welcomeShown = false;
   try {
