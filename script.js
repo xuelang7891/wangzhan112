@@ -173,7 +173,13 @@ async function fetchRemoteState() {
       .select('data')
       .eq('id', SITE_DATA_ID)
       .maybeSingle();
-    if (error || !data || typeof data.data !== 'object') return;
+    if (error || !data) return;
+    /* 公网还没有内容：站长登录则把本地数据推上去（首次迁移），
+       访客沿用默认/本地内容；不覆盖本地已有数据 */
+    if (typeof data.data !== 'object' || Object.keys(data.data || {}).length === 0) {
+      if (isOwner()) pushRemoteState();
+      return;
+    }
     state = normalizeState(data.data);
     saveState();
     renderAll();
