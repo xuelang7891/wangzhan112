@@ -28,6 +28,12 @@ const STORAGE_KEY = 'xl-resource-hub-v1';
 const SESSION_KEY = 'xl-resource-hub-session-v1';
 const WELCOME_KEY = 'xl-resource-hub-welcome-v1';
 
+/* Supabase 云端同步：站点内容统一存到 site_data 表（id=1 单行），
+   站长保存后自动推送公网，访客打开自动拉取最新。
+   建表 SQL 见 README 或下方注释，需在 Supabase SQL Editor 执行一次。 */
+const SITE_DATA_TABLE = 'site_data';
+const SITE_DATA_ID = 1;
+
 /* 默认头像（内联 SVG，不依赖任何外部图片） */
 const DEFAULT_AVATAR =
   'data:image/svg+xml;charset=utf-8,' +
@@ -142,6 +148,78 @@ function saveState() {
   } catch (err) {
     /* 存储不可用（如隐私模式）时仅保留内存数据 */
   }
+  /* 云端同步：站长登录后每次保存都会自动推送公网（失败不打扰当前操作） */
+  pushRemoteState();
+}
+
+/* 校验远端数据结构，防止脏数据破坏页面 */
+function normalizeState(raw) {
+  const base = defaultState();
+  if (!raw || typeof raw !== 'object') return base;
+  return {
+    profile: Object.assign({}, base.profile, raw.profile || {}),
+    resources: Array.isArray(raw.resources) ? raw.resources : base.resources,
+    contacts: Array.isArray(raw.contacts) ? raw.contacts : base.contacts,
+    qqGroup: Object.assign({}, base.qqGroup, raw.qqGroup || {})
+  };
+}
+
+/* 页面打开时从公网拉取最新内容（访客与站长都执行，实现"修改后自动更新"） */
+async function fetchRemoteState() {
+  if (!supabaseClient) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from(SITE_DATA_TABLE)
+      .select('data')
+      .eq('id', SITE_DATA_ID)
+      .maybeSingle();
+    if (error || !data || typeof data.data !== 'object') return;
+    state = normalizeState(data.data);
+    saveState();
+    renderAll();
+  } catch (err) {
+    /* 离线或表未创建时静默，沿用本地内容 */
+  }
+}
+
+/* 把当前内容推送到公网（仅站长登录后 RLS 放行） */
+async function pushRemoteState() {
+  if (!supabaseClient || !isOwner()) return;
+  try {
+    const { error } = await supabaseClient
+      .from(SITE_DATA_TABLE)
+      .update({ data: state, updated_at: new Date().toISOString() })
+      .eq('id', SITE_DATA_ID);
+    if (error) {
+      showToast('同步公网失败：' + (error.message || '请稍后重试'));
+    }
+  } catch (err) {
+    showToast('网络错误，同步公网失败');
+  }
+}
+
+/* 首次迁移：公网还没有内容时，把站长本地的数据推上去 */
+async function maybeMigrateRemote() {
+  if (!supabaseClient || !isOwner()) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from(SITE_DATA_TABLE)
+      .select('data')
+      .eq('id', SITE_DATA_ID)
+      .maybeSingle();
+    if (error) return;
+    const empty =
+      !data || typeof data.data !== 'object' ||
+      Object.keys(data.data || {}).length === 0;
+    if (empty) {
+      await supabaseClient
+        .from(SITE_DATA_TABLE)
+        .update({ data: state, updated_at: new Date().toISOString() })
+        .eq('id', SITE_DATA_ID);
+    }
+  } catch (err) {
+    /* 忽略：首次迁移失败不阻塞，之后任一保存操作会自动补齐 */
+  }
 }
 
 function loadSession() {
@@ -201,6 +279,8 @@ async function restoreSupabaseSession() {
     };
     saveSession();
     renderAll();
+    /* 站长登录态恢复后，若公网还没有内容则把本地数据迁移上去 */
+    maybeMigrateRemote();
   } catch (err) {
     /* Supabase 不可达时保持本地会话 */
   }
@@ -1002,6 +1082,8 @@ async function submitLogin() {
         ? '站长登录成功，现在可以编辑内容了'
         : '欢迎回来，' + (metaName || name)
     );
+    /* 站长登录后：若公网还没有内容则把本地数据迁移上去 */
+    maybeMigrateRemote();
   } catch (err) {
     showToast('网络错误，请稍后重试');
   } finally {
@@ -1119,6 +1201,8 @@ function listenAuthState() {
   try {
     supabaseClient.auth.onAuthStateChange(function (event) {
       if (event === 'PASSWORD_RECOVERY') openResetPanel();
+      /* 任意登录成功（含注册后自动登录）都触发公网数据迁移检查 */
+      if (event === 'SIGNED_IN') maybeMigrateRemote();
     });
   } catch (err) {
     /* 忽略：监听失败仅失去自动弹出改密面板的能力 */
@@ -1534,6 +1618,9 @@ function init() {
   renderAll();
   resetResourceForm();
   resetContactForm();
+
+  /* 云端同步：打开页面时拉取公网最新内容（实现"修改后自动更新"） */
+  fetchRemoteState();
 
   /* PWA：注册 Service Worker（失败不影响页面正常使用） */
   if ('serviceWorker' in navigator) {

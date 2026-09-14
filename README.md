@@ -7,7 +7,7 @@
 - 响应式设计，适配手机与电脑屏幕
 - **PWA（路线 A）**：支持「添加到主屏幕」，手机桌面获得 App 图标 + 全屏独立窗口体验，离线可用
 - 账号系统：**Supabase Auth（邮箱注册）**，邮箱验证邮件由 Supabase 平台代发，账号数据存云端
-- 站点内容（资源 / 联系方式 / 资料 / 头像）保存在浏览器 localStorage
+- 站点内容（资源 / 联系方式 / 资料 / 头像）：**存储在 Supabase 数据库**，站长保存后自动同步公网，所有访客看到同一份内容（此前存 localStorage 导致公网看不见，已改为云端存储）
 
 ## 文件结构
 
@@ -70,7 +70,42 @@ const CONFIG = {
 - 头像：站长登录后点击首页大头像即可更换（自动压缩后保存）
 - 首次进入会弹窗提示头像在哪里修改
 
-> **数据说明**：账号数据（邮箱、密码、验证状态）存储在 Supabase 云端；站点内容（资源 / 联系方式 / 资料 / 头像）保存在访问者浏览器的 localStorage 中，换浏览器或清除缓存后会回到默认内容。
+> **数据说明**：账号数据（邮箱、密码、验证状态）存储在 Supabase 云端；站点内容（资源 / 联系方式 / 资料 / 头像）**同步存储在 Supabase 数据库 `site_data` 表**（见下方 SQL），站长登录编辑保存后自动推送公网，访客打开页面自动拉取最新内容，实现"修改后自动更新"。
+
+## 云端同步（Supabase 数据库）
+
+站点内容存储依赖一张 `site_data` 表（单行 JSON），**部署前需在 Supabase 控制台执行一次建表 SQL**：
+
+1. 打开 [Supabase 控制台](https://app.supabase.com) → 你的项目 → **SQL Editor**（左侧菜单）
+2. 新建查询，粘贴执行以下 SQL：
+
+```sql
+-- 站点内容云端存储：单行 JSON，公开可读，仅站长邮箱可写
+create table if not exists public.site_data (
+  id integer primary key,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.site_data enable row level security;
+
+drop policy if exists site_data_read on public.site_data;
+create policy site_data_read on public.site_data
+  for select using (true);
+
+drop policy if exists site_data_write on public.site_data;
+create policy site_data_write on public.site_data
+  for all
+  using (auth.email() = '3902041497@qq.com')
+  with check (auth.email() = '3902041497@qq.com');
+
+insert into public.site_data (id, data) values (1, '{}'::jsonb)
+on conflict (id) do nothing;
+```
+
+3. 执行成功后返回，站长登录任意修改一次内容即可完成首次公网数据迁移。
+
+> 工作原理：页面打开时读取 `site_data` 表中公网内容并渲染（访客与站长一致）；站长登录后每次保存（新增/编辑/删除资源、联系方式、资料、头像、QQ 群信息）都会自动写入该表，公网立即可见。localStorage 仅作为本地缓存与离线降级。
 
 ## 部署到开源仓库 / 静态托管
 
@@ -92,6 +127,7 @@ const CONFIG = {
 MIT
 
 > **更新记录**：
+> - 2026-09-14 站点内容改存 Supabase 数据库（site_data 表）：站长保存后自动同步公网，访客打开自动拉取最新，解决"本地上传公网看不见"。
 > - 2026-09-13 网站完善：OG 分享卡片（微信/QQ 转发显示标题+简介+缩略图）、忘记密码（重置邮件 → 回站设置新密码）、友好 404 页面、sitemap.xml + robots.txt（SEO 收录）。
 > - 2026-09-13 新增 PWA 支持（manifest + 图标 + Service Worker），可添加到手机主屏幕获得 App 体验。
 > - 2026-09-13 接入 Supabase 邮箱账号系统：注册 → 平台代发验证邮件 → 点链接激活 → 邮箱 + 密码登录（Firebase 因国内不可访问未采用）。
