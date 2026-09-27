@@ -108,6 +108,9 @@ function defaultState() {
    ========================================================= */
 let state;
 let session = null;
+/* 站长身份的运行时标记：只有在 Supabase 真实验证过邮箱后才会置 true，
+   不随 localStorage 持久化 —— 防止手改本地数据伪造站长编辑界面 */
+let ownerVerified = false;
 
 /* --- Supabase 客户端（CDN 加载失败时降级，登录/注册会提示刷新） --- */
 let supabaseClient = null;
@@ -188,14 +191,18 @@ async function fetchRemoteState() {
   }
 }
 
-/* 把当前内容推送到公网（仅站长登录后 RLS 放行） */
+/* 把当前内容推送到公网（仅站长登录后 RLS 放行）。
+   用 upsert 而非 update：即使 site_data 表还没有 id=1 那行种子数据，
+   也会自动插入新行，避免"update 匹配 0 行、静默不生效"的坑。 */
 async function pushRemoteState() {
   if (!supabaseClient || !isOwner()) return;
   try {
     const { error } = await supabaseClient
       .from(SITE_DATA_TABLE)
-      .update({ data: state, updated_at: new Date().toISOString() })
-      .eq('id', SITE_DATA_ID);
+      .upsert(
+        { id: SITE_DATA_ID, data: state, updated_at: new Date().toISOString() },
+        { onConflict: 'id' }
+      );
     if (error) {
       showToast('同步公网失败：' + (error.message || '请稍后重试'));
     }
@@ -220,8 +227,10 @@ async function maybeMigrateRemote() {
     if (empty) {
       await supabaseClient
         .from(SITE_DATA_TABLE)
-        .update({ data: state, updated_at: new Date().toISOString() })
-        .eq('id', SITE_DATA_ID);
+        .upsert(
+          { id: SITE_DATA_ID, data: state, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        );
     }
   } catch (err) {
     /* 忽略：首次迁移失败不阻塞，之后任一保存操作会自动补齐 */
@@ -246,7 +255,11 @@ function loadSession() {
 function saveSession() {
   try {
     if (session) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      /* 只持久化账号与昵称；站长标记是运行时状态，不落盘 */
+      localStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ account: session.account, name: session.name })
+      );
     } else {
       localStorage.removeItem(SESSION_KEY);
     }
@@ -256,7 +269,19 @@ function saveSession() {
 }
 
 function isOwner() {
-  return !!(session && session.isOwner);
+  return !!(session && ownerVerified);
+}
+
+/* 站长邮箱白名单校验（登录 / 会话恢复时调用，通过后才置 ownerVerified） */
+function emailIsOwner(email) {
+  if (!email) return false;
+  return (
+    CONFIG.ownerAccounts
+      .map(function (a) {
+        return a.trim().toLowerCase();
+      })
+      .indexOf(String(email).trim().toLowerCase()) !== -1
+  );
 }
 
 /* 从 Supabase 会话恢复本站登录态（刷新页面后保持登录） */
@@ -272,17 +297,13 @@ async function restoreSupabaseSession() {
     const email = sbUser.email.trim().toLowerCase();
     const metaName =
       (sbUser.user_metadata && sbUser.user_metadata.name) || '';
-    const isOwnerAccount =
-      CONFIG.ownerAccounts
-        .map(function (a) {
-          return a.trim().toLowerCase();
-        })
-        .indexOf(email) !== -1;
+    const isOwnerAccount = emailIsOwner(email);
     session = {
       account: email,
       name: metaName || email.split('@')[0],
       isOwner: isOwnerAccount
     };
+    ownerVerified = isOwnerAccount;
     saveSession();
     renderAll();
     /* 站长登录态恢复后，若公网还没有内容则把本地数据迁移上去 */
@@ -685,6 +706,7 @@ function bindEvents() {
       });
     }
     session = null;
+    ownerVerified = false;
     saveSession();
     dom.accountMenu.hidden = true;
     dom.accountBtn.setAttribute('aria-expanded', 'false');
@@ -822,7 +844,7 @@ function bindEvents() {
     submitQunForm();
   });
 
-  /* --- 登录：名字 + 邮箱/手机号 + 密码 --- */
+  /* --- 登录：邮箱 + 密码 --- */
   dom.loginForm.addEventListener('submit', function (e) {
     e.preventDefault();
     submitLogin();
@@ -1062,18 +1084,14 @@ async function submitLogin() {
     const user = data.user;
     const metaName =
       (user && user.user_metadata && user.user_metadata.name) || '';
-    const isOwnerAccount =
-      CONFIG.ownerAccounts
-        .map(function (a) {
-          return a.trim().toLowerCase();
-        })
-        .indexOf(accCheck.account) !== -1;
+    const isOwnerAccount = emailIsOwner(accCheck.account);
 
     session = {
       account: accCheck.account,
       name: metaName || name || accCheck.account.split('@')[0],
       isOwner: isOwnerAccount
     };
+    ownerVerified = isOwnerAccount;
     saveSession();
     dom.loginForm.reset();
     closeModal('loginModal');
@@ -1559,7 +1577,8 @@ function openQunEditor() {
   }, 80);
 }
 
-function copyQunNumber() {  const num = (state.qqGroup && state.qqGroup.number) || '';
+function copyQunNumber() {
+  const num = (state.qqGroup && state.qqGroup.number) || '';
   if (!num) return;
   const done = function () {
     showToast('群号已复制，去 QQ 搜索加入吧');

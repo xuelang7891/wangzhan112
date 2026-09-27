@@ -7,7 +7,9 @@
 
 'use strict';
 
-const CACHE = 'xl-resource-hub-v1';
+/* 缓存版本：每次改动 style.css / script.js / index.html 等本站文件后，
+   务必把版本号 +1（如 v2 → v3），老用户刷新即可拿到最新资源 */
+const CACHE = 'xl-resource-hub-v2';
 const CORE = [
   './',
   './index.html',
