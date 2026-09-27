@@ -304,6 +304,55 @@ button {
   gap: 8px;
 }
 
+/* 管理员管理按钮：登录按钮左侧的「＋」，仅站长登录后显示 */
+.nav-actions #addAdminBtn {
+  border-style: dashed;
+}
+
+.nav-actions #addAdminBtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---------- 管理员名单 ---------- */
+.admin-list {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.admin-email {
+  color: var(--text);
+  word-break: break-all;
+}
+
+.admin-empty {
+  padding: 10px 12px;
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+.btn-danger.btn-sm {
+  padding: 6px 12px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
 .menu-btn {
   display: none;
   align-items: center;
@@ -1214,4 +1263,60 @@ textarea.input {
   .brand {
     font-size: 16px;
   }
+}
+
+/* ---------- 管理员名单（站长弹窗内） ---------- */
+.admin-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.admin-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.admin-mail {
+  font-size: 14px;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.admin-del {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--danger, #dc2626);
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease;
+}
+
+.admin-del:hover {
+  border-color: var(--danger, #dc2626);
+  color: var(--danger, #dc2626);
+}
+
+.admin-empty {
+  padding: 12px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
 }

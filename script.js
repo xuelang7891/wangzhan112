@@ -11,9 +11,13 @@
    ========================================================= */
 const CONFIG = {
   siteName: '薛朗的资源仓库',
-  /* 站长账号：使用这些邮箱登录后即可编辑本站内容 */
+  /* 站长账号：使用这些邮箱登录后即可编辑本站内容。
+     数据库里建了 site_admins 表后，以 Supabase 云端名单为准（推荐），
+     这里的列表作为兜底（云端查不到时才生效）。
+     云端名单可以在 Supabase 控制台 → Table Editor → site_admins 里点鼠标增删，
+     不需要改代码、也不需要重新部署。 */
   ownerAccounts: ['3902041497@qq.com'],
-  /* 站长邮箱 */
+  /* 站长邮箱（站长字段的默认归属，如联系邮箱等） */
   ownerEmail: '3902041497@qq.com',
   /* Supabase 项目配置（浏览器安全密钥，可公开）：
      在 Supabase 控制台「Project Settings → API Keys」获取 */
@@ -272,7 +276,7 @@ function isOwner() {
   return !!(session && ownerVerified);
 }
 
-/* 站长邮箱白名单校验（登录 / 会话恢复时调用，通过后才置 ownerVerified） */
+/* 站长邮箱白名单校验（本地兜底：云端名单不可用时生效） */
 function emailIsOwner(email) {
   if (!email) return false;
   return (
@@ -282,6 +286,125 @@ function emailIsOwner(email) {
       })
       .indexOf(String(email).trim().toLowerCase()) !== -1
   );
+}
+
+/* 站长身份判定：优先查 Supabase 云端的 site_admins 名单（Rpc: is_site_admin），
+   失败/未配置时回退到代码里的 CONFIG.ownerAccounts。
+   加人只需往 Supabase 的 site_admins 表插一行，不用改代码也不用重新部署。 */
+async function verifyOwnerRemote() {
+  if (!supabaseClient) return false;
+  try {
+    const { data, error } = await supabaseClient.rpc('is_site_admin');
+    if (error) {
+      /* 未建表/未建函数：回退到本地名单 */
+      return emailIsOwner(session && session.account);
+    }
+    return data === true;
+  } catch (err) {
+    return emailIsOwner(session && session.account);
+  }
+}
+
+/* ===== 管理员管理：导航栏「＋」入口，仅站长可见 =====
+   名单存在 Supabase 的 site_admins 表（需先执行 supabase_admin_setup.sql），
+   添加后对方用该邮箱注册激活、登录即自动获得编辑权限。 */
+const ADMINS_TABLE = 'site_admins';
+
+async function openAdminModal() {
+  if (!supabaseClient) {
+    showToast('未连接云端，暂时无法管理管理员');
+    return;
+  }
+  dom.adminEmail.value = '';
+  openModal('adminModal');
+  loadAdminList();
+}
+
+async function loadAdminList() {
+  dom.adminList.textContent = '';
+  const { data, error } = await supabaseClient
+    .from(ADMINS_TABLE)
+    .select('email')
+    .order('added_at', { ascending: true });
+
+  if (error) {
+    const li = document.createElement('li');
+    li.className = 'admin-empty';
+    li.textContent =
+      '多管理员还没开启：请先在 Supabase 的 SQL Editor 执行 supabase_admin_setup.sql';
+    dom.adminList.appendChild(li);
+    return;
+  }
+
+  (data || []).forEach(function (row) {
+    const li = document.createElement('li');
+    li.className = 'admin-item';
+
+    const mail = document.createElement('span');
+    mail.className = 'admin-mail';
+    mail.textContent = row.email;
+    li.appendChild(mail);
+
+    const del = document.createElement('button');
+    del.className = 'admin-del';
+    del.type = 'button';
+    del.setAttribute('data-remove-admin', row.email);
+    del.setAttribute('aria-label', '移除管理员：' + row.email);
+    del.textContent = '移除';
+    li.appendChild(del);
+
+    dom.adminList.appendChild(li);
+  });
+}
+
+async function submitAddAdmin() {
+  const check = validateAccount(dom.adminEmail.value);
+  if (!check.ok) {
+    showToast(check.msg);
+    return;
+  }
+  if (!supabaseClient) {
+    showToast('未连接云端，暂时无法添加管理员');
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from(ADMINS_TABLE)
+    .insert({ email: check.account });
+
+  if (error) {
+    if (/duplicate|23505|unique/i.test(error.message || '')) {
+      showToast('这个邮箱已经是管理员了');
+    } else {
+      showToast('添加失败：' + (error.message || '请稍后再试'));
+    }
+    return;
+  }
+
+  dom.adminEmail.value = '';
+  showToast('已添加，对方注册激活后登录即可共同维护');
+  loadAdminList();
+}
+
+async function removeAdmin(email) {
+  if (!supabaseClient) return;
+  if (session && session.account && session.account.toLowerCase() === email) {
+    showToast('不能移除自己');
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from(ADMINS_TABLE)
+    .delete()
+    .eq('email', email);
+
+  if (error) {
+    showToast('移除失败：' + (error.message || '请稍后再试'));
+    return;
+  }
+
+  showToast('已移除管理员：' + email);
+  loadAdminList();
 }
 
 /* 从 Supabase 会话恢复本站登录态（刷新页面后保持登录） */
@@ -297,7 +420,7 @@ async function restoreSupabaseSession() {
     const email = sbUser.email.trim().toLowerCase();
     const metaName =
       (sbUser.user_metadata && sbUser.user_metadata.name) || '';
-    const isOwnerAccount = emailIsOwner(email);
+    const isOwnerAccount = await verifyOwnerRemote();
     session = {
       account: email,
       name: metaName || email.split('@')[0],
@@ -928,6 +1051,29 @@ function bindEvents() {
     if (cb) cb();
   });
 
+  /* --- 管理员管理（站长专属） --- */
+  dom.addAdminBtn = document.getElementById('addAdminBtn');
+  dom.adminModal = document.getElementById('adminModal');
+  dom.adminForm = document.getElementById('adminForm');
+  dom.adminEmail = document.getElementById('adminEmail');
+  dom.adminList = document.getElementById('adminList');
+  dom.addAdminBtn.addEventListener('click', openAdminModal);
+  dom.adminForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    submitAddAdmin();
+  });
+  dom.adminList.addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-remove-admin]');
+    if (!btn) return;
+    const email = btn.getAttribute('data-remove-admin');
+    askConfirm(
+      '确定移除管理员「' + email + '」吗？移除后对方立即失去编辑权限。',
+      function () {
+        removeAdmin(email);
+      }
+    );
+  });
+
   /* --- 联系邮箱弹窗：复制邮箱地址 --- */
   dom.mailCopyBtn.addEventListener('click', copyMailAddress);
 }
@@ -1084,8 +1230,7 @@ async function submitLogin() {
     const user = data.user;
     const metaName =
       (user && user.user_metadata && user.user_metadata.name) || '';
-    const isOwnerAccount = emailIsOwner(accCheck.account);
-
+    const isOwnerAccount = await verifyOwnerRemote();
     session = {
       account: accCheck.account,
       name: metaName || name || accCheck.account.split('@')[0],
@@ -1488,6 +1633,135 @@ function askConfirm(text, callback) {
   dom.confirmText.textContent = text;
   dom.confirmOkBtn._cb = callback;
   openModal('confirmModal');
+}
+
+/* =========================================================
+   9.6 管理员管理（站长专属：多人共同维护）
+   名单存在 Supabase 的 site_admins 表，由 is_site_admin() + RLS 保护：
+   只有已是站长的账号才能查看、添加、移除管理员。
+   ========================================================= */
+const ADMIN_TABLE = 'site_admins';
+
+function openAdminModal() {
+  if (!isOwner()) return;
+  openModal('adminModal');
+  dom.adminEmail.value = '';
+  loadAdminList();
+  setTimeout(function () {
+    dom.adminEmail.focus();
+  }, 60);
+}
+
+async function loadAdminList() {
+  dom.adminList.textContent = '';
+  if (!supabaseClient) {
+    dom.adminList.appendChild(adminEmptyRow('账号系统未加载，请刷新页面'));
+    return;
+  }
+  try {
+    const { data, error } = await supabaseClient
+      .from(ADMIN_TABLE)
+      .select('email')
+      .order('added_at', { ascending: true });
+    if (error) {
+      dom.adminList.appendChild(
+        adminEmptyRow('未开启多管理员：请先按 supabase_admin_setup.sql 配置数据库')
+      );
+      return;
+    }
+    if (!data || !data.length) {
+      dom.adminList.appendChild(adminEmptyRow('暂无管理员'));
+      return;
+    }
+    data.forEach(function (row) {
+      if (row && row.email) dom.adminList.appendChild(buildAdminRow(row.email));
+    });
+  } catch (err) {
+    dom.adminList.appendChild(adminEmptyRow('读取管理员名单失败'));
+  }
+}
+
+function adminEmptyRow(text) {
+  const li = document.createElement('li');
+  li.className = 'admin-empty';
+  li.textContent = text;
+  return li;
+}
+
+function buildAdminRow(email) {
+  const li = document.createElement('li');
+  li.className = 'admin-row';
+
+  const name = document.createElement('span');
+  name.className = 'admin-email';
+  name.textContent = email;
+  li.appendChild(name);
+
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-danger btn-sm';
+  btn.type = 'button';
+  btn.textContent = '移除';
+  btn.setAttribute('data-remove-admin', email);
+  li.appendChild(btn);
+
+  return li;
+}
+
+async function submitAddAdmin() {
+  const check = validateAccount(dom.adminEmail.value);
+  if (!check.ok) {
+    showToast(check.msg);
+    return;
+  }
+  if (!supabaseClient) {
+    showToast('账号系统未加载，请刷新页面重试');
+    return;
+  }
+  const btn = dom.adminForm.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const { error } = await supabaseClient
+      .from(ADMIN_TABLE)
+      .insert({ email: check.account });
+    if (error) {
+      const msg = error.message || '';
+      if (/duplicate|unique/i.test(msg)) {
+        showToast('该邮箱已经是管理员了');
+      } else if (/policy|row-level|permission|denied/i.test(msg)) {
+        showToast('没有权限：请先在 Supabase 执行 supabase_admin_setup.sql');
+      } else if (/relation .* does not exist|not found/i.test(msg)) {
+        showToast('缺少 site_admins 表：请先执行 supabase_admin_setup.sql');
+      } else {
+        showToast('添加失败：' + msg);
+      }
+      return;
+    }
+    dom.adminEmail.value = '';
+    showToast('已添加管理员：' + check.account);
+    loadAdminList();
+  } catch (err) {
+    showToast('网络错误，添加失败');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function removeAdmin(email) {
+  if (!supabaseClient || !email) return;
+  try {
+    const { error } = await supabaseClient
+      .from(ADMIN_TABLE)
+      .delete()
+      .eq('email', email);
+    if (error) {
+      showToast('移除失败：' + (error.message || '请稍后重试'));
+      return;
+    }
+    showToast('已移除管理员：' + email);
+    loadAdminList();
+  } catch (err) {
+    showToast('网络错误，移除失败');
+  }
 }
 
 /* =========================================================

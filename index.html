@@ -47,6 +47,10 @@
     </nav>
 
     <div class="nav-actions">
+      <!-- 管理员管理：仅站长可见，登录按钮左侧的「＋」 -->
+      <button class="icon-btn owner-only" id="addAdminBtn" type="button" aria-label="添加管理员" title="添加管理员">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+      </button>
       <div class="account-wrap">
         <button class="account-btn" id="accountBtn" type="button" aria-haspopup="true" aria-expanded="false">
           <img class="nav-avatar" id="navAvatar" alt="头像">
@@ -378,6 +382,26 @@
       <a class="btn btn-ghost btn-block" id="mailWebBtn" href="#" target="_blank" rel="noopener noreferrer" hidden>用 QQ 邮箱写信</a>
     </div>
     <p class="modal-hint">复制后粘贴到任意邮箱的收件人栏即可发送</p>
+  </div>
+</div>
+
+<!-- ===== 管理员管理弹窗（站长专属：添加 / 移除共同维护者） ===== -->
+<div class="modal-mask" id="adminModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+    <button class="modal-close" type="button" data-close="adminModal" aria-label="关闭管理员弹窗">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+    </button>
+    <h3 class="modal-title" id="adminTitle">管理员</h3>
+    <p class="modal-sub">把邮箱加进名单，对方注册并激活邮箱后登录即可共同维护本站。</p>
+    <form id="adminForm" novalidate>
+      <div class="field">
+        <label for="adminEmail">邮箱</label>
+        <input class="input" id="adminEmail" type="text" placeholder="对方的注册邮箱，如 xx@qq.com" autocomplete="off">
+      </div>
+      <button class="btn btn-primary btn-block" type="submit">添加管理员</button>
+    </form>
+    <ul class="admin-list" id="adminList"></ul>
+    <p class="editor-hint" id="adminHint">对方需先用该邮箱在网站上注册、完成邮箱激活，登录后自动获得编辑权限。</p>
   </div>
 </div>
 
